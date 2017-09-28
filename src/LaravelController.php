@@ -1,6 +1,6 @@
 <?php
 
-namespace Optimus\Bruno;
+namespace Misiuziu\Bruno;
 
 use JsonSerializable;
 use InvalidArgumentException;
