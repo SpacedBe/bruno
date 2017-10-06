@@ -14,7 +14,7 @@ trait EloquentBuilderTrait
     /**
      * Apply resource options to a query builder
      * @param  Builder $queryBuilder
-     * @param  array  $options
+     * @param  array $options
      * @return Builder
      */
     protected function applyResourceOptions(Builder $queryBuilder, array $options = [])
@@ -54,7 +54,7 @@ trait EloquentBuilderTrait
         }
 
         if (isset($page)) {
-            if (! isset($limit)) {
+            if (!isset($limit)) {
                 throw new InvalidArgumentException('A limit is required when using page.');
             }
 
@@ -81,14 +81,12 @@ trait EloquentBuilderTrait
             $or = $group['or'];
             $filters = $group['filters'];
 
-            $queryBuilder->where(function (Builder $query) use ($filters, $or, &$joins) {
-                foreach ($filters as $filter) {
-                    $this->applyFilter($query, $filter, $or, $joins);
-                }
-            });
+            foreach ($filters as $filter) {
+                $this->applyFilter($queryBuilder, $filter, $or, $joins);
+            }
         }
 
-        foreach(array_diff($joins, $previouslyJoined) as $join) {
+        foreach (array_diff_key($joins, $previouslyJoined) as $join) {
             $this->joinRelatedModelIfExists($queryBuilder, $join);
         }
 
@@ -104,12 +102,12 @@ trait EloquentBuilderTrait
     protected function applyFilter(Builder $queryBuilder, array $filter, $or = false, array &$joins)
     {
         // Destructure Shorthand Filtering Syntax if filter is Shorthand
-        if (! array_key_exists('key', $filter) && count($filter) >= 3) {
+        if (!array_key_exists('key', $filter) && count($filter) >= 3) {
             $filter = [
-                'key'      => ($filter[0] ?: null),
+                'key' => ($filter[0] ?: null),
                 'operator' => ($filter[1] ?: null),
-                'value'    => ($filter[2] ?: null),
-                'not'      => (array_key_exists(3, $filter) ? $filter[3] : null),
+                'value' => ($filter[2] ?: null),
+                'not' => (array_key_exists(3, $filter) ? $filter[3] : null),
             ];
         }
 
@@ -129,19 +127,19 @@ trait EloquentBuilderTrait
             $clauseOperator = null;
             $databaseField = null;
 
-            switch($operator) {
+            switch ($operator) {
                 case 'ct':
                 case 'sw':
                 case 'ew':
                     $valueString = [
-                        'ct' => '%'.$value.'%', // contains
-                        'ew' => '%'.$value, // ends with
-                        'sw' => $value.'%' // starts with
+                        'ct' => '%' . $value . '%', // contains
+                        'ew' => '%' . $value, // ends with
+                        'sw' => $value . '%' // starts with
                     ];
 
                     $castToText = (($dbType === 'pgsql') ? 'TEXT' : 'CHAR');
                     $databaseField = DB::raw(sprintf('CAST(%s.%s AS ' . $castToText . ')', $table, $key));
-                    $clauseOperator = ($not ? 'NOT':'') . (($dbType === 'pgsql') ? 'ILIKE' : 'LIKE');
+                    $clauseOperator = ($not ? 'NOT' : '') . (($dbType === 'pgsql') ? 'ILIKE' : 'LIKE');
                     $value = $valueString[$operator];
                     break;
                 case 'eq':
@@ -187,7 +185,7 @@ trait EloquentBuilderTrait
 
             $customFilterMethod = $this->hasCustomMethod('filter', $key);
             if ($customFilterMethod) {
-                call_user_func_array([$this, $customFilterMethod], [
+                $tableToJoin = call_user_func_array([$this, $customFilterMethod], [
                     $queryBuilder,
                     $method,
                     $clauseOperator,
@@ -197,7 +195,8 @@ trait EloquentBuilderTrait
 
                 // column to join.
                 // trying to join within a nested where will get the join ignored.
-                $joins[] = $key;
+                foreach ($tableToJoin as $tableKey => $value)
+                    $joins[$tableKey] = $value;
             } else {
                 // In operations do not have an operator
                 if (in_array($operator, ['in', 'bt'])) {
@@ -222,7 +221,7 @@ trait EloquentBuilderTrait
     protected function applySorting(Builder $queryBuilder, array $sorting, array $previouslyJoined = [])
     {
         $joins = [];
-        foreach($sorting as $sortRule) {
+        foreach ($sorting as $sortRule) {
             if (is_array($sortRule)) {
                 $key = $sortRule['key'];
                 $direction = mb_strtolower($sortRule['direction']) === 'asc' ? 'ASC' : 'DESC';
@@ -233,7 +232,7 @@ trait EloquentBuilderTrait
 
             $customSortMethod = $this->hasCustomMethod('sort', $key);
             if ($customSortMethod) {
-                $joins[] = $key;
+                $joins[$key] = $key;
 
                 call_user_func([$this, $customSortMethod], $queryBuilder, $direction);
             } else {
@@ -241,7 +240,7 @@ trait EloquentBuilderTrait
             }
         }
 
-        foreach(array_diff($joins, $previouslyJoined) as $join) {
+        foreach (array_diff_key($joins, $previouslyJoined) as $join) {
             $this->joinRelatedModelIfExists($queryBuilder, $join);
         }
 
@@ -269,6 +268,15 @@ trait EloquentBuilderTrait
      */
     private function joinRelatedModelIfExists(Builder $queryBuilder, $key)
     {
+        if (is_array($key)) {
+            $queryBuilder->join(
+                $key['table'],
+                $key['table_first_key'],
+                '=',
+                $key['table_second_key']
+            );
+            return;
+        }
         $model = $queryBuilder->getModel();
 
         // relationship exists, join to make special sort
@@ -294,7 +302,7 @@ trait EloquentBuilderTrait
                 );
                 $queryBuilder->join(
                     $relation->getRelated()->getTable(),
-                    $relation->getRelated()->getTable().'.'.$relation->getRelated()->getKeyName(),
+                    $relation->getRelated()->getTable() . '.' . $relation->getRelated()->getKeyName(),
                     '=',
                     $relation->getQualifiedRelatedKeyName(),
                     $type
@@ -308,9 +316,6 @@ trait EloquentBuilderTrait
                     $type
                 );
             }
-
-            $table = $model->getTable();
-            $queryBuilder->select(sprintf('%s.*', $table));
         }
     }
 }
