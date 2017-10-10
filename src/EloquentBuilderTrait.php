@@ -274,7 +274,7 @@ trait EloquentBuilderTrait
                 $key['table_first_key'],
                 '=',
                 $key['table_second_key']
-            );
+            )->addSelect(sprintf('%s.*', $key['table']));
             return;
         }
         $model = $queryBuilder->getModel();
@@ -316,6 +316,8 @@ trait EloquentBuilderTrait
                     $type
                 );
             }
+            $table = $model->getTable();
+            $queryBuilder->addSelect(sprintf('%s.*', $table));
         }
     }
 }
